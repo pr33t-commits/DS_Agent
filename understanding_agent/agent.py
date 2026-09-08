@@ -46,7 +46,6 @@ def build_agent(executor, run_dir: Path, model=None, max_calls=12):
                 return json.dumps({"ok": False, "error": "Execution budget exhausted. Report limitations."})
             counter += 1
             evidence_id = f"python_{counter:03d}"
-            print(f"Executing {evidence_id}:\n{code}\n", flush=True)
             (run_dir / f"{evidence_id}.py").write_text(code, encoding="utf-8")
             result = executor.run(code)
             result["evidence_id"] = evidence_id
