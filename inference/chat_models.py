@@ -7,7 +7,6 @@ def local_model(name: str, base_url: str):
     return ChatOllama(model=name, base_url=base_url, temperature=0, num_ctx=16384,
                       client_kwargs={"timeout": 120})
 
-
 def make_model(name: str = "Qwen/Qwen3-0.6B", provider: str = "transformer", base_url: str | None = None):
     if provider == "transformer":
         from .transformers_backend import TransformersChatModel
