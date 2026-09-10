@@ -98,6 +98,19 @@ Runs save input copies/hashes, configuration, package versions, prompt, scripts,
 tool outputs, message traces and reports. Preflight errors create no run; model
 failures retain partial artifacts. Set `--output` to persistent storage on rented
 machines and copy runs before destroying an instance. Traces may contain data;
+
+To run independent analyses of the same inputs, use `--rollouts`:
+
+```bash
+python -m understanding_agent.cli --experiment-id data-quality-v1 --rollouts 5 --output runs
+```
+
+The model is loaded once and reused, but every rollout has fresh agent state.
+Its final state is saved as `rollouts/final_state_001.json` (and so on) under a
+experiment directory. If no `--experiment-id` is supplied, one is generated.
+`rollout_summary.json` lists successful and failed
+rollouts; a failed rollout writes its error to `rollouts/error_###.json` without
+discarding completed rollout outputs.
 the project does not enable hosted tracing (external environment settings still apply).
 
 ```bash
