@@ -180,14 +180,16 @@ class SingleAgentAnalysisSystem:
                 ) -> Dict[str, Any]:
             """Executes the generated code on specified DataFrames.
             
-            DataFrames are passed through a single variable:
+            USAGE INSTRUCTIONS:-
+            1. DataFrames are passed through a single variable:
 
 			df : Dict[str, pandas.DataFrame]
-
 	    	Keys are DataFrame IDs (strings). Values are pandas DataFrames.
 		    In the code, ALWAYS access DataFrames using:
 			    df = df["<df_id>"]
-   
+
+            2. The code must store the final output in a variable named 'result'.
+            
             Args:
                 code: The code which is to be executed
                 df_ids: The IDs of the DataFrames to be used
