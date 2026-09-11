@@ -222,7 +222,7 @@ def ast_safety_check(code: str):
 #         }
 
 
-def _worker_exec(code_str: str, dfs:  Dict[str, pd.DataFrame], queue: Queue, stdout_path: str, stderr_path: str):
+def _worker_exec(code_str: str, df:  Dict[str, pd.DataFrame], queue: Queue, stdout_path: str, stderr_path: str):
     """
     Worker executed in a separate process.
     Redirects stdout/stderr to files, enables faulthandler and returns detailed error info.
@@ -241,7 +241,7 @@ def _worker_exec(code_str: str, dfs:  Dict[str, pd.DataFrame], queue: Queue, std
         print("[Worker] Starting execution...", flush=True)
         print("[Worker] Code to execute:\n", code_str, flush=True)
 
-        local_ns = {"pd": pd, "np": np, "__builtins__": builtins.__dict__, "dfs": dfs}
+        local_ns = {"pd": pd, "np": np, "__builtins__": builtins.__dict__, "df": df}
 
         ############ UNCOMMENT BELOW #############################
         
@@ -281,7 +281,7 @@ def _worker_exec(code_str: str, dfs:  Dict[str, pd.DataFrame], queue: Queue, std
 
         if "transform" in local_ns:
             print("[Worker] Found transform(dfs) function, calling it...", flush=True)
-            result = local_ns["transform"](dfs)
+            result = local_ns["transform"](df)
         elif "result" in local_ns:
             print("[Worker] Found 'result' variable, using it directly.", flush=True)
             result = local_ns["result"]
@@ -327,7 +327,7 @@ def _worker_exec(code_str: str, dfs:  Dict[str, pd.DataFrame], queue: Queue, std
             pass
 
 
-def run_generated_code_in_subprocess(code_str: str, dfs: Dict[str, pd.DataFrame], timeout: int = 30):
+def run_generated_code_in_subprocess(code_str: str, df: Dict[str, pd.DataFrame], timeout: int = 30):
     """
     Runs AST checks, then runs code in separate process with timeout.
     Returns dict with status and either new_df or diagnostics including exitcode, stdout and stderr.
@@ -362,7 +362,7 @@ def run_generated_code_in_subprocess(code_str: str, dfs: Dict[str, pd.DataFrame]
     stdout_path = stdout_tf.name
     stderr_path = stderr_tf.name
 
-    p = Process(target=_worker_exec, args=(code_str, dfs, q, stdout_path, stderr_path))
+    p = Process(target=_worker_exec, args=(code_str, df, q, stdout_path, stderr_path))
     p.daemon = False
     p.start()
 

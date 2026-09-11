@@ -55,8 +55,8 @@ GENERAL INSTRUCTIONS:-
 
 GOAL:-
 1. Logical verification of the data.
-2. Analysis must be relevant for demand forecast modeling downstream.
-3. Ask doubts and clarifying questions based on analysis.
+2. Relevant analysis for demand forecast modeling downstream.
+3. Framing doubts and clarifying questions based on analysis.
 """
 
 EXECUTOR_TIMEOUT = 30  # seconds
@@ -182,11 +182,11 @@ class SingleAgentAnalysisSystem:
             
             DataFrames are passed through a single variable:
 
-			dfs : Dict[str, pandas.DataFrame]
+			df : Dict[str, pandas.DataFrame]
 
 	    	Keys are DataFrame IDs (strings). Values are pandas DataFrames.
 		    In the code, ALWAYS access DataFrames using:
-			    df = dfs["<df_id>"]
+			    df = df["<df_id>"]
    
             Args:
                 code: The code which is to be executed
@@ -205,11 +205,11 @@ class SingleAgentAnalysisSystem:
                     return {"messages": ToolMessage(content="Specify df_id or df_ids", tool_call_id=runtime.tool_call_id)}
                 
                 # Collect DataFrames
-                dfs = {}
+                df = {}
                 missing = []
                 for df_id in df_ids:
                     try:
-                        dfs[df_id] = self.df_store[df_id]
+                        df[df_id] = self.df_store[df_id]
                     except KeyError:
                         missing.append(df_id)
                 
@@ -218,7 +218,7 @@ class SingleAgentAnalysisSystem:
                     return {"messages": ToolMessage(content=f"df_ids not found: {missing}", tool_call_id=runtime.tool_call_id)}
                 
                 # Execute code
-                res = run_generated_code_in_subprocess(code, dfs, timeout=timeout)
+                res = run_generated_code_in_subprocess(code, df, timeout=timeout)
 
                 if res.get("status") == "error":
                     error_msg = res.get("error")
