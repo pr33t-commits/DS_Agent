@@ -200,11 +200,11 @@ class SingleAgentAnalysisSystem:
 
             if not code:
                 print("No generated code found in state.")
-                return {"messages": ToolMessage(content="No code available. Generate code first.", tool_call_id=runtime.tool_call_id)}
+                return {"messages": [ToolMessage(content="No code available. Generate code first.", tool_call_id=runtime.tool_call_id)]}
             
             try:
                 if not df_ids:
-                    return {"messages": ToolMessage(content="Specify df_id or df_ids", tool_call_id=runtime.tool_call_id)}
+                    return {"messages": [ToolMessage(content="Specify df_id or df_ids", tool_call_id=runtime.tool_call_id)]}
                 
                 # Collect DataFrames
                 df = {}
@@ -217,7 +217,7 @@ class SingleAgentAnalysisSystem:
                 
                 if missing:
                     print(f"❌ DataFrames not found: {missing}")
-                    return {"messages": ToolMessage(content=f"df_ids not found: {missing}", tool_call_id=runtime.tool_call_id)}
+                    return {"messages": [ToolMessage(content=f"df_ids not found: {missing}", tool_call_id=runtime.tool_call_id)]}
                 
                 # Execute code
                 res = run_generated_code_in_subprocess(code, df, timeout=timeout)
@@ -226,7 +226,7 @@ class SingleAgentAnalysisSystem:
                     error_msg = res.get("error")
                     print("Code Execution Traceback/Error:\n", res.get("traceback",error_msg))
                     return {
-                        "messages": ToolMessage(content=f"Code execution failed with message:- {error_msg}", tool_call_id=runtime.tool_call_id),
+                        "messages": [ToolMessage(content=f"Code execution failed with message:- {error_msg}", tool_call_id=runtime.tool_call_id)],
                         "coding_error": error_msg,
                         "coding_error_traceback": str(res.get("traceback", ""))
                     }
@@ -241,7 +241,7 @@ class SingleAgentAnalysisSystem:
                     print(f"✅ Created dataframe with id: {new_df_id} with Summary: {summary} and Description: {description}")
                     
                     return Command(update={
-                        "messages": ToolMessage(content=f"Created dataframe with id: {new_df_id} with Summary: {summary}", tool_call_id=runtime.tool_call_id),
+                        "messages": [ToolMessage(content=f"Created dataframe with id: {new_df_id} with Summary: {summary}", tool_call_id=runtime.tool_call_id)],
                         "dataframe_info": {
                             new_df_id: {"Summary": summary, "Description": description}
                         },
@@ -252,14 +252,14 @@ class SingleAgentAnalysisSystem:
                 else:
                     result_text = str(res.get("result", ""))
                     print("Code Execution Result:\n", result_text[:500])
-                    return Command(update={"messages": ToolMessage(content = f"Code execution result: {result_text}",
-                                                                   tool_call_id=getattr(runtime, "tool_call_id", None)), 
+                    return Command(update={"messages": [ToolMessage(content = f"Code execution result: {result_text}",
+                                                                   tool_call_id=getattr(runtime, "tool_call_id", None))], 
                             "coding_error": "", "coding_error_traceback": ""})
             
             except Exception as e:
                 tb = traceback.format_exc()
                 print(f"Exception during code execution: {str(e)}")
-                return Command(update={"messages": ToolMessage(content=f"Exception during code execution: {str(e)}", tool_call_id=getattr(runtime, "tool_call_id", None)), 
+                return Command(update={"messages": [ToolMessage(content=f"Exception during code execution: {str(e)}", tool_call_id=getattr(runtime, "tool_call_id", None))], 
                                        "coding_error": str(e), "coding_error_traceback": tb})
 
         # Return tools: list_dfs_tool, calculate_accuracy_fn, combined code_run_tool_fn
