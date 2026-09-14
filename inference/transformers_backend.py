@@ -76,6 +76,9 @@ class TransformersChatModel(BaseChatModel):
             self._model = AutoModelForCausalLM.from_pretrained(self.model_name)
             self._model.to("cuda" if torch.cuda.is_available() else "cpu")
             self._model.eval()
+        
+        for i, msg in enumerate(messages):
+            print(i, type(msg), repr(msg))
         history = convert_to_openai_messages(messages)
         for message in history:
             for call in message.get("tool_calls", []):
@@ -84,7 +87,7 @@ class TransformersChatModel(BaseChatModel):
                     call["function"]["arguments"] = json.loads(args)
         inputs = self._tokenizer.apply_chat_template(
             history, tools=tools or None, tokenize=True, add_generation_prompt=True,
-            return_dict=True, return_tensors="pt", enable_thinking=False,
+            return_dict=True, return_tensors="pt", enable_thinking=True,
         ).to(self._model.device)
         with torch.inference_mode():
             output = self._model.generate(
