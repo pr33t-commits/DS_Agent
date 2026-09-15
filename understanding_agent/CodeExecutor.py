@@ -11,6 +11,7 @@ from langchain.tools import tool
 import pandas as pd, numpy as np
 import builtins
 import tempfile, os
+from queue import Empty
 
 # Configure logging in the main part of your script
 logging.basicConfig(
@@ -229,6 +230,9 @@ def _worker_exec(code_str: str, df:  Dict[str, pd.DataFrame], queue: Queue, stdo
     """
     import sys
     import faulthandler
+    so = None
+    se = None
+    original_stdout, original_stderr = sys.stdout, sys.stderr
     try:
         # Redirect stdout/stderr to files so parent can inspect after crash
         so = open(stdout_path, "w", encoding="utf-8", errors="replace")
@@ -287,7 +291,8 @@ def _worker_exec(code_str: str, df:  Dict[str, pd.DataFrame], queue: Queue, stdo
             result = local_ns["result"]
         else:
             msg = "Neither transform(dfs) function nor result variable found after execution."
-            # ... error handling ...
+            queue.put({"status": "error", "error": msg, "traceback": msg})
+            return
 
         # --- MODIFIED RESULT HANDLING ---
         # Check for the new dual-output format: { "response": str, "dataframes": dict }
@@ -307,22 +312,38 @@ def _worker_exec(code_str: str, df:  Dict[str, pd.DataFrame], queue: Queue, stdo
         else:
             queue.put({"status": "ok_random_generated", "result": str(result)})
 
-        so.close()
-        # ... rest of the function ...
-        
-        se.close()
-    except Exception as e:
+    except BaseException as e:
+        # Catch BaseException as well as Exception: generated code can call
+        # exit(), which raises SystemExit and otherwise bypasses an Exception
+        # handler, leaving the parent with no traceback.
         tb = traceback.format_exc()
         try:
-            # write traceback to stderr file so parent can read it
-            with open(stderr_path, "a", encoding="utf-8", errors="replace") as se:
+            # The queue is the primary channel; the file is a durable fallback
+            # if the worker dies before its queue feeder flushes.
+            if se is not None:
                 se.write("\n[Worker Exception Traceback]\n")
                 se.write(tb)
+                se.flush()
+            else:
+                with open(stderr_path, "a", encoding="utf-8", errors="replace") as err_file:
+                    err_file.write("\n[Worker Exception Traceback]\n")
+                    err_file.write(tb)
         except Exception:
             pass
-        queue.put({"status": "error", "error": str(e), "traceback": tb})
         try:
-            so.close()
+            queue.put({"status": "error", "error": str(e), "traceback": tb})
+        except Exception:
+            pass
+    finally:
+        sys.stdout, sys.stderr = original_stdout, original_stderr
+        try:
+            if so is not None:
+                so.close()
+        except Exception:
+            pass
+        try:
+            if se is not None:
+                se.close()
         except Exception:
             pass
 
@@ -369,8 +390,9 @@ def run_generated_code_in_subprocess(code_str: str, df: Dict[str, pd.DataFrame],
     out = None
     try:
         out = q.get(timeout=timeout)
-    except Exception:
-        # timed out waiting for queue
+    except Empty:
+        # The worker may have crashed before it could publish its result.
+        # Its stderr file and exit code below are then the diagnostics.
         pass
 
     # Give short time for process to exit cleanly

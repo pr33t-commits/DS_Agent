@@ -73,10 +73,14 @@ class TransformersChatModel(BaseChatModel):
         from transformers import AutoModelForCausalLM, AutoTokenizer
         if self._model is None:
             self._tokenizer = AutoTokenizer.from_pretrained(self.model_name)
-            self._model = AutoModelForCausalLM.from_pretrained(self.model_name)
+            # Diagnostic fallback for invalid sampling probabilities on CUDA.
+            # Explicit attention bypasses optimized attention kernels; it can be slower.
+            self._model = AutoModelForCausalLM.from_pretrained(
+                self.model_name, 
+                # attn_implementation="eager",
+            )
             self._model.to("cuda" if torch.cuda.is_available() else "cpu")
-            self._model.eval()
-        
+            self._model.eval()        
         for i, msg in enumerate(messages):
             print(i, type(msg), repr(msg))
         history = convert_to_openai_messages(messages)
@@ -89,9 +93,49 @@ class TransformersChatModel(BaseChatModel):
             history, tools=tools or None, tokenize=True, add_generation_prompt=True,
             return_dict=True, return_tensors="pt", enable_thinking=True,
         ).to(self._model.device)
+        ################ ERROR CHECK ######################
+        with torch.inference_mode():
+            outputs = self._model(
+                **inputs,
+                output_hidden_states=True,
+                return_dict=True,
+            )
+
+        logits = outputs.logits[:, -1, :]
+
+        tokenizer_size = len(self._tokenizer)
+        model_vocab_size = self._model.config.vocab_size
+
+        print("tokenizer.vocab_size:", self._tokenizer.vocab_size)
+        print("len(tokenizer):", tokenizer_size)
+        print("model.config.vocab_size:", model_vocab_size)
+
+        valid_logits = logits[:, :tokenizer_size]
+        padded_logits = logits[:, tokenizer_size:]
+
+        print("\n--- REAL TOKENIZER VOCAB ---")
+        print("shape:", valid_logits.shape)
+        print("NaNs:", torch.isnan(valid_logits).sum().item())
+        print("Infs:", torch.isinf(valid_logits).sum().item())
+        print("finite:", torch.isfinite(valid_logits).all().item())
+
+        print("\n--- PADDED MODEL VOCAB ---")
+        print("shape:", padded_logits.shape)
+        print("NaNs:", torch.isnan(padded_logits).sum().item())
+        print("Infs:", torch.isinf(padded_logits).sum().item())
+        print("finite:", torch.isfinite(padded_logits).all().item())
+
+        nan_ids = torch.where(torch.isnan(logits[0]))[0]
+
+        print("\nTotal NaN token IDs:", len(nan_ids))
+        print("First NaN IDs:", nan_ids[:30].tolist())
+         ################ ERROR CHECK ######################
         with torch.inference_mode():
             output = self._model.generate(
-                **inputs, max_new_tokens=self.max_new_tokens, do_sample=False,
+                # Qwen3 thinking mode requires sampling: greedy decoding can loop.
+                **inputs, max_new_tokens=self.max_new_tokens, 
+                # do_sample=False,
+                do_sample=True, temperature=0.6, top_p=0.95, top_k=20, min_p=0.0,
                 pad_token_id=self._tokenizer.pad_token_id or self._tokenizer.eos_token_id,
             )
         return self._tokenizer.decode(output[0, inputs["input_ids"].shape[-1]:], skip_special_tokens=True)

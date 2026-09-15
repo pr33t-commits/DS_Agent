@@ -3,6 +3,7 @@ import os
 from unittest.mock import patch
 
 import pytest
+import pandas as pd
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
@@ -10,6 +11,7 @@ from langchain_core.outputs import ChatGeneration, ChatResult
 from understanding_agent.agent import build_agent, validate_evidence
 from understanding_agent.executor import DockerExecutor
 from understanding_agent.schemas import UnderstandingReport
+from understanding_agent.CodeExecutor import run_generated_code_in_subprocess
 
 
 REPORT = {
@@ -63,6 +65,25 @@ def test_reject_unsupported_evidence(evidence):
 
 def test_execution_code_limit(tmp_path):
     assert not DockerExecutor(tmp_path).run("x" * 24001)["ok"]
+
+
+def test_subprocess_executor_returns_generated_code_traceback():
+    result = run_generated_code_in_subprocess(
+        "raise ValueError('intentional worker failure')",
+        {"source": pd.DataFrame({"id": [1]})},
+    )
+
+    assert result["status"] == "error"
+    assert "intentional worker failure" in result["error"]
+    assert "ValueError: intentional worker failure" in result["traceback"]
+
+
+def test_subprocess_executor_returns_traceback_for_system_exit():
+    result = run_generated_code_in_subprocess("exit('intentional exit')", {})
+
+    assert result["status"] == "error"
+    assert "intentional exit" in result["traceback"]
+    assert "SystemExit" in result["traceback"]
 
 
 def test_missing_docker_error_is_actionable(tmp_path):

@@ -12,7 +12,7 @@ import pandas as pd, numpy as np
 
 from .agent import SYSTEM_PROMPT, build_agent, make_model, validate_evidence
 from .executor import DockerExecutor, SubprocessExecutor
-from .agent import SingleAgentAnalysisSystem
+from .agent_working import SingleAgentAnalysisSystem
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DATA = PROJECT_ROOT / "data" / "DataCoSupplyChainDataset.csv"
@@ -36,7 +36,7 @@ def main():
     parser = argparse.ArgumentParser(description="Understand a CSV and its column dictionary with a local ReAct agent.")
     parser.add_argument("--data", type=Path, default=DEFAULT_DATA)
     parser.add_argument("--columns", type=Path, default=DEFAULT_COLUMNS)
-    parser.add_argument("--model", help="Hugging Face model ID/local checkpoint for transformer; server model name otherwise", default = "Qwen/Qwen3-4B")
+    parser.add_argument("--model", help="Hugging Face model ID/local checkpoint for transformer; server model name otherwise", default = "Qwen/Qwen3-0.6B")
     parser.add_argument("--provider", choices=["transformer", "ollama", "openai-compatible"], default="transformer")
     parser.add_argument("--base-url", help="Defaults to localhost:11434 for Ollama or localhost:8000/v1 for compatible servers")
     parser.add_argument("--executor", choices=["subprocess", "docker"], default="subprocess")
