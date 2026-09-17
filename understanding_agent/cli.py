@@ -13,6 +13,7 @@ import pandas as pd, numpy as np
 from .agent import SYSTEM_PROMPT, build_agent, make_model, validate_evidence
 from .executor import DockerExecutor, SubprocessExecutor
 from .agent_working import SingleAgentAnalysisSystem
+from .output_files import save_readable_output
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DATA = PROJECT_ROOT / "data" / "DataCoSupplyChainDataset.csv"
@@ -105,7 +106,6 @@ def main():
         df_dict[dict_key]['Description'] = description
         
     (run_dir / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    (run_dir / "system_prompt.txt").write_text(SYSTEM_PROMPT, encoding="utf-8")
     try:
         executor = get_executor(inputs)
         # agent, evidence = build_agent(executor, run_dir, make_model(args.model, args.provider, args.base_url), args.max_calls)
@@ -134,14 +134,19 @@ def main():
             # between rollouts; the shared client keeps model weights in memory.
             agent = SingleAgentAnalysisSystem(dataframes=df_dict, model=args.model,
                                               llm=shared_llm)
+            (run_dir / "system_prompt.txt").write_text(agent.system_prompt, encoding="utf-8")
             output_path = rollout_dir / f"final_state_{rollout_number:03d}.json"
+            readable_path = rollout_dir / f"raw_output_{rollout_number:03d}.txt"
             try:
                 final_state = agent.analyze()
+                save_readable_output(final_state, readable_path)
                 output_path.write_text(
                     json.dumps(final_state, indent=2, default=json_default),
                     encoding="utf-8",
                 )
                 rollout_summary.append({"rollout": rollout_number, "status": "ok",
+                                        "output_valid": final_state.get("output_valid"),
+                                        "raw_output": str(readable_path.relative_to(run_dir)),
                                         "final_state": str(output_path.relative_to(run_dir))})
                 print(f"Saved rollout {rollout_number}: {output_path}", flush=True)
             except Exception as exc:

@@ -57,23 +57,19 @@ class OutputClaim(BaseModel):
     id: str = Field(min_length=1, description="Unique claim ID within this report")
     claim: str = Field(min_length=1)
     status: Literal["computed", "documented", "inferred", "unresolved"]
-    dataframe_ids: List[str]
-    columns: List[str]
     evidence_ids: List[str] = Field(default_factory=list)
     downstream_implication: str
-
+    clarification_questions: Optional[str] = Field(default=None, description="Optional questions for the business to clarify unresolved claims or implications")
 
 class UnderstandingOutput(BaseModel):
     """All sections are required, even when only unresolved claims are possible."""
     model_config = ConfigDict(extra="forbid")
     dataset_profile: List[OutputClaim] = Field(min_length=1)
     column_semantics: List[OutputClaim] = Field(min_length=1)
+    entity_structure: List[OutputClaim] = Field(min_length=1)
     row_grain: List[OutputClaim] = Field(min_length=1)
     temporal_structure: List[OutputClaim] = Field(min_length=1)
-    entity_structure: List[OutputClaim] = Field(min_length=1)
-    quality_findings: List[OutputClaim] = Field(min_length=1)
     task_relevance: List[OutputClaim] = Field(min_length=1)
-    clarification_questions: List[OutputClaim] = Field(min_length=1)
 
 
 def output_instructions(require_evidence: bool) -> str:
@@ -94,13 +90,11 @@ Your final answer MUST be one JSON object, without Markdown fences or introducto
 Use exactly these eight sections, each a nonempty array of claim records:
 - dataset_profile: dimensions, types, missingness, duplicates, distributions.
 - column_semantics: meaning, units, dictionary fidelity and mismatches; cover all columns.
+- entity_structure: entities, identifiers, relationships and hierarchies.
 - row_grain: what one row represents, candidate keys and measured uniqueness.
 - temporal_structure: timestamps, coverage, frequency, gaps and their interpretation.
-- entity_structure: entities, identifiers, relationships and hierarchies.
-- quality_findings: problems, affected columns, measured extent and consequences.
-- task_relevance: support/limitations for demand forecasting; distinguish sales from demand.
-- clarification_questions: actionable questions and which downstream decisions depend on answers.
-Every record has id, claim, status, dataframe_ids, columns, evidence_ids,
+- task_relevance: support/limitations for demand forecasting; distinguish sales from demand; concerns/risks for downstream modeling.
+Every record has id, claim, status, evidence_ids,
 and downstream_implication. IDs must be unique across ALL sections, e.g. temporal_003.
 Use status computed for measured facts, documented for dictionary statements,
 inferred for hypotheses, and unresolved for unknowns/questions. An inference must not
@@ -126,18 +120,45 @@ def parse_output(content: str, evidence: Dict, require_evidence: bool) -> Unders
                     raise ValueError(f"{claim.id}: unknown or failed evidence ID {reference}")
     return report
 
-SYSTEM_PROMPT = """You are a dataset understanding analyst. 
+SYSTEM_PROMPT = """You are a dataset understanding analyst preparing data for downstream demand forecasting.
 
-GENERAL INSTRUCTIONS:-
-1. All numbers and factual answers must come from data present in the df_store. Do not hallucinate.
-2. STRICTLY follow USAGE INSTRUCTIONS of all tools if available.
-3. Make a rough plan before starting execution.
-4. Generate code, execute and extract insights from the dataframes provided in df_store.
+INVESTIGATION STANDARD:
+The dataframe inventory is a starting map. Names, shapes and descriptions support
+orientation; they do not establish missingness, uniqueness, distributions, temporal
+coverage or relationships. Establish those properties from the underlying records.
+Read dictionary contents and compare their meanings with the observed values.
 
-GOAL:-
-1. Logical verification of the data.
-2. Relevant analysis for demand forecast modeling downstream.
-3. Framing doubts and clarifying questions based on analysis.
+Begin with a short investigation plan around the uncertainties that could change
+forecast construction. Use the available tools to obtain the observations needed
+to resolve them, following each tool's usage instructions.
+
+Prioritize concrete measurements: missing counts and rates, duplicate rows and
+candidate-key collisions, numeric ranges/quantiles, unusual categorical values,
+date parsing failures and date ranges. Then investigate relationships: repeated
+orders versus order lines, product/customer/location mappings, and quantity/value
+consistency where the dictionary supports such checks.
+
+For plausible forecast entities, examine observation counts across time, gaps,
+variation across entities and candidate aggregation levels. Separate recorded sales
+from latent demand; absent rows alone do not establish zero demand or stockouts.
+Choose relevant checks rather than assuming every dataset has these concepts.
+
+Follow up on consequential findings. For example, localize missingness to groups
+or periods, inspect why a proposed key repeats, or compare unusual values against
+dictionary definitions. A measured result should guide the next investigation.
+Prefer a few resolved, consequential questions over a long list of generic risks.
+
+Report findings with actual magnitudes, affected columns/groups/time windows and
+their downstream implications. Distinguish measured facts, documented definitions,
+inferences and unknowns. No numeric or factual claim may be invented. If an issue
+can be answered from the supplied records, investigate it before asking the business.
+Reserve clarification questions for missing business meaning, unavailable data, or
+ambiguities that remain after inspection. State which checks remain incomplete
+and why if the tool or iteration budget prevents adequate investigation.
+
+Before finishing, assess whether your conclusions add measured knowledge beyond
+the inventory and whether high-impact uncertainties have been investigated. A
+column-name-based list of possible concerns is not a completed understanding report.
 """
 
 EXECUTOR_TIMEOUT = 30  # seconds
@@ -311,7 +332,7 @@ class SingleAgentAnalysisSystem:
                 evidence_id = runtime.tool_call_id
                 self.evidence[evidence_id] = {
                     "ok": str(res.get("status", "")).startswith("ok"),
-                    "tool": "code_executor_fn", "code": code, "dataframe_ids": df_ids,
+                    "tool": "code_executor_fn", "code": code, #"dataframe_ids": df_ids,
                     "result": str(res.get("result", "")),
                 }
 

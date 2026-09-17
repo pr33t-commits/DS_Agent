@@ -81,8 +81,6 @@ class TransformersChatModel(BaseChatModel):
             )
             self._model.to("cuda" if torch.cuda.is_available() else "cpu")
             self._model.eval()        
-        for i, msg in enumerate(messages):
-            print(i, type(msg), repr(msg))
         history = convert_to_openai_messages(messages)
         for message in history:
             for call in message.get("tool_calls", []):
@@ -93,6 +91,7 @@ class TransformersChatModel(BaseChatModel):
             history, tools=tools or None, tokenize=True, add_generation_prompt=True,
             return_dict=True, return_tensors="pt", enable_thinking=True,
         ).to(self._model.device)
+        print("\n--- LLM INPUT (including special tokens) ---\n" + self._tokenizer.decode(inputs["input_ids"][0].tolist(), skip_special_tokens=False, clean_up_tokenization_spaces=False) + "\n--- END LLM INPUT ---", flush=True)
         ################ ERROR CHECK ######################
         with torch.inference_mode():
             outputs = self._model(
